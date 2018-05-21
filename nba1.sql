@@ -76,8 +76,8 @@ SHOW COLUMNS FROM team;
 ALTER TABLE team MODIFY testAddNewLast VARCHAR(20) DEFAULT "小米修改属性" AFTER teamName
 #修改列名称
 ALTER TABLE team CHANGE testAddNewLast testUpdateLast VARCHAR(20) DEFAULT "小米修改属性和字段名称" AFTER teamAge
-#把team表恢复原状 
-ALTER TABLE team DROP testAddCenter, DROP testUpdateLast
+ 
+ 
  
  
 
