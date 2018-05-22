@@ -177,26 +177,182 @@ INSERT INTO player VALUES(NULL,"托尼-帕克","后卫",9,(SELECT teamId FROM te
 INSERT INTO player VALUES(NULL,"鲁迪-盖伊","前锋",22,(SELECT teamId FROM team WHERE team.`teamName`='马刺')); 
  
 
+#子查询   子查询指的是嵌套在查询内部，并且始终出现在小括号里边
+#子查询   子查询可以包含多个关键字或条件  DISTINCT\group by \order by\函数等等
+#子查询   子查询的外层查询可以是select \ insert\update \set\do
+#子查询   子查询可以返回标量、一行、一列或者子查询
+
+#比较运算符引发的子查询 =、>、<、>=、<=、!= 
+#查询平均值
+SELECT AVG(team.`championNumber`) FROM team;
+#查询平均值保留两位小数
+SELECT ROUND(AVG(team.`championNumber`),2 )FROM team;
+#查询总冠军数量在平均值以上的
+SELECT * FROM team WHERE team.`championNumber`>(SELECT ROUND(AVG(team.`championNumber`),2 )FROM team);
+#使用 any\some、all关键字来修饰运算符
+#查询凯尔特人队队员的号码
+SELECT player.`playerNumber` FROM player WHERE player.`teamId` = (SELECT team.`teamId` FROM team WHERE team.`teamName`="凯尔特人");
+#查询所有球员中，背号>凯尔特人球员的背号的球员
+#使用any 和some 的意思是一样的  只要满足返回集合中的任意一个就算满足条件
+#在查询凯尔特人队队员的号码  返回的集合是 11，55，20，42，46  也就是说，使用any和some 只要背号>11就满足条件
+SELECT *FROM player WHERE player.`playerNumber`> ANY
+(SELECT player.`playerNumber` FROM player WHERE player.`teamId` = 
+	(SELECT team.`teamId` FROM team WHERE team.`teamName`="凯尔特人")
+);
+
+SELECT *FROM player WHERE player.`playerNumber`> SOME
+(SELECT player.`playerNumber` FROM player WHERE player.`teamId` = 
+	(SELECT team.`teamId` FROM team WHERE team.`teamName`="凯尔特人")
+);
+
+#但是使用all关键字修饰的时候，就是要满足所有的值，才算符合条件  就是必须背号>55才满足
+SELECT *FROM player WHERE player.`playerNumber`> ALL
+(SELECT player.`playerNumber` FROM player WHERE player.`teamId` = 
+	(SELECT team.`teamId` FROM team WHERE team.`teamName`="凯尔特人")
+);
+
+SELECT *FROM player WHERE player.`playerNumber`>55
+
+#由[NOT]IN/EXISTS引发的子查询
+#EXISTS很少用，这里不说了
+#=ANY和IN等效
+#！=ALL和NOT IN等效
+#查询背号和凯尔特人队的都不一样的
+SELECT *FROM player WHERE player.`playerNumber` !=ALL
+(SELECT player.`playerNumber` FROM player WHERE player.`teamId` = 
+	(SELECT team.`teamId` FROM team WHERE team.`teamName`="凯尔特人")
+);
+#用这个来验证
+SELECT *FROM player WHERE player.`playerNumber` !=11 AND player.`playerNumber` !=55 
+AND player.`playerNumber` !=20 AND player.`playerNumber` !=42  AND player.`playerNumber` !=46
+
+
+
+#多表更新
+#把球队的总冠军数量赋值给队里的球员
+#首先给球员添加总冠军数量的字段
+ALTER TABLE player ADD championNumber INT NOT NULL DEFAULT 0;
+#多表更新   
+#UPDATE 要更新的表名称  连接方式    要连接的表  ON  连接条件                     SET 要修改的值            =   改成哪个数
+UPDATE     player       INNER JOIN    team      ON player.`teamId`=team.`teamId` SET player.`championNumber`=team.`championNumber`
+
+#把冠军球队放到一个新的表里边
+CREATE TABLE championTeam(
+	teamId INT  UNSIGNED AUTO_INCREMENT PRIMARY KEY, 
+	teamName VARCHAR(20) NOT NULL
+)SELECT team.`teamName` FROM team WHERE team.`championNumber`>0;
 
 
 
 
 
-#模糊删除
-DELETE FROM team WHERE team.`teamName` LIKE '马刺%'
+
+
+#表的连接
+# A表  连接类型  B表  ON 连接条件
+#INNER JOIN 内连接  在MySQL中，JOIN,CROSS JOIN 和 INNER JOIN是等价的
+#LEFT[OUTER] JOIN 左外连接
+#RIGHT [OUTER] JOIN 右外连接
+
+#先删除player表和team表的主外键关系
+SHOW CREATE TABLE player
+#查询出来的结果是  test_ibfk_1
+CREATE TABLE `player` (
+  `playerId` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+  `playerName` VARCHAR(20) NOT NULL,
+  `playerPosition` VARCHAR(20) NOT NULL,
+  `playerNumber` INT(10) UNSIGNED NOT NULL,
+  `teamId` INT(10) UNSIGNED NOT NULL,
+  `championNumber` INT(11) NOT NULL DEFAULT '0',
+  PRIMARY KEY (`playerId`),
+  KEY `teamId` (`teamId`),
+  CONSTRAINT `player_ibfk_1` FOREIGN KEY (`teamId`) REFERENCES `team` (`teamId`) ON DELETE CASCADE
+) ENGINE=INNODB AUTO_INCREMENT=56 DEFAULT CHARSET=utf8
+
+#然后用 player_ibfk_1去删除外键
+ALTER TABLE player DROP FOREIGN KEY  player_ibfk_1
+#然后插入一个球员，该球队的id不在team表中
+INSERT INTO player VALUES(NULL,"李小米","后卫",6,999,5); 
+#然后插入两个球队，该球队下没有球员
+INSERT INTO team VALUES(NULL,"76人",2018-1976,3,"富国银行中心",82,52);
+INSERT INTO team VALUES(NULL,"森林狼",2018-1989,0,"标靶中心",82,47);
+
+#用一下内连接  内连接只能查询两个表的交集，都有的部分数据，刚才插入进去的李小米就没有
+SELECT team.`teamName`,player.`playerName`,player.`playerPosition`,player.`playerNumber` 
+FROM team INNER JOIN player ON team.`teamId`=player.`teamId`
+
+#外连接 左外连接  结果集中包括左边中的全部内容和右表中符合条件的数据
+SELECT team.`teamName`,player.`playerName`,player.`playerPosition`,player.`playerNumber` 
+FROM team LEFT JOIN player ON team.`teamId`=player.`teamId`
+
+#外连接 右外连接  结果集中包括右边中的全部内容和左表中符合条件的数据
+SELECT team.`teamName`,player.`playerName`,player.`playerPosition`,player.`playerNumber` 
+FROM team RIGHT JOIN player ON team.`teamId`=player.`teamId`
+#多张数据表的连接
+SELECT team.`teamName` ,coach.`coachName`,player.`playerName`,player.`playerPosition`,player.`playerNumber`
+FROM team INNER JOIN player ON team.`teamId`=player.`teamId` INNER JOIN coach ON team.`teamId`=coach.`teamId`
+
+A LEFT JOIN B join_condition
+1、B表的结果集依赖A表
+2、A表的结果集根据做链接条件依赖所有数据表(B表除外)
+3、左外连接条件决定如何让检索B表(在没有指定where条件的情况下)
+4、如果A表的某条记录符合where条件，到那时B表中没有符合条件的记录，将生成一个所有列位空的额外的B行 
+
+
+#自连接
+#这里咱们假设教练员是有分类的，比如有3层分类，一般情况下会去设计三个表。但是如果有N层分类呢？怎么设计
+#这里咱们给教练表增加一个字段  一个上一层的分类id,这样就相当于有了一个N层分类的表了
+#先改造一下数据表和数据
+ALTER TABLE coach ADD parentId INT UNSIGNED  DEFAULT 0;
+ 
+UPDATE coach SET coach.`parentId`=0 WHERE coach.`coachName`='波波维奇';
+
+UPDATE coach SET coach.`parentId`=(SELECT coachId FROM coach WHERE coachName='波波维奇') 
+WHERE coach.`coachName`='科尔';
+
+UPDATE coach SET coach.`parentId`=(SELECT c.coachId FROM (SELECT coach.* FROM coach) AS c  WHERE c.coachName='波波维奇') 
+WHERE coach.`coachName`='科尔';
+
+UPDATE coach SET coach.`parentId`=(SELECT c.coachId FROM (SELECT coach.* FROM coach) AS c  WHERE c.coachName='波波维奇') 
+WHERE coach.`coachName`='史蒂文斯';
+
+UPDATE coach SET coach.`parentId`=(SELECT c.coachId FROM (SELECT coach.* FROM coach) AS c  WHERE c.coachName='科尔') 
+WHERE coach.`coachName`='德安东尼';
+UPDATE coach SET coach.`parentId`=(SELECT c.coachId FROM (SELECT coach.* FROM coach) AS c  WHERE c.coachName='科尔') 
+WHERE coach.`coachName`='布登霍尔泽';
+
+UPDATE coach SET coach.`parentId`=(SELECT c.coachId FROM (SELECT coach.* FROM coach) AS c  WHERE c.coachName='史蒂文斯') 
+WHERE coach.`coachName`='克利福德';
+UPDATE coach SET coach.`parentId`=(SELECT c.coachId FROM (SELECT coach.* FROM coach) AS c  WHERE c.coachName='史蒂文斯') 
+WHERE coach.`coachName`='金特里';
+
+ 
+UPDATE coach SET coach.`parentId`=(SELECT c.coachId FROM (SELECT coach.* FROM coach) AS c  WHERE c.coachName='德安东尼') 
+WHERE coach.`coachName`='霍伊博格';
+UPDATE coach SET coach.`parentId`=(SELECT c.coachId FROM (SELECT coach.* FROM coach) AS c  WHERE c.coachName='德安东尼') 
+WHERE coach.`coachName`='泰伦-卢';
+UPDATE coach SET coach.`parentId`=(SELECT c.coachId FROM (SELECT coach.* FROM coach) AS c  WHERE c.coachName='霍伊博格') 
+WHERE coach.`coachName`='比克斯塔夫';
+UPDATE coach SET coach.`parentId`=(SELECT c.coachId FROM (SELECT coach.* FROM coach) AS c  WHERE c.coachName='泰伦-卢') 
+WHERE coach.`coachName`='斯托茨';
+
+  
+#然后查询出来自己的id和名称  以及上一层的名称
+SELECT s.coachId,s.coachName,p.coachName FROM coach AS s LEFT JOIN coach AS p ON s.`parentId`=p.`coachId`
+#然后查询出来自己的id和名称  以及下一层的名称
+SELECT p.coachId,p.coachName,s.coachName FROM coach AS p RIGHT JOIN coach AS s ON s.`parentId`=p.`coachId`
+
+#多表删除
+DELETE FROM championTeam
+INSERT INTO championTeam(championTeam.`teamName`) SELECT team.`teamName`  FROM team ;
+#删除总冠军数量为0的球队
+DELETE c FROM championTeam AS c LEFT JOIN team AS t ON c.`teamName`=t.`teamName` WHERE t.championNumber =0;
+
+
+
 #查询全部
 SELECT * FROM team;
 SELECT * FROM coach;
 SELECT * FROM test;
 SELECT * FROM player;
-
-
-#条件查询
-SELECT teamId FROM team WHERE team.`teamName`='马刺'
-
-
-#删除表
-DROP TABLE team ;
-DROP TABLE coach ;
-DROP TABLE test;
-DROP TABLE player;
+SELECT * FROM championTeam;
